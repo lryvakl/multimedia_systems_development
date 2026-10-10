@@ -1,6 +1,6 @@
 # Multimedia Systems Development
 
-| Lab | Topic | Stack |
+| Lab | Topic |
 | --- | --- | --- |
 | [Lab 2](lab2-media-player/) | Media player (desktop)
 
