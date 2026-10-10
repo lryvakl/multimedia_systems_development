@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' file: blob: data: http: https:; connect-src 'self' file: blob: data: http: https:; worker-src 'self' blob:"
+    />
+    <title>Player</title>
+    <link rel="stylesheet" href="styles/main.css" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <main class="player" id="player">
+        <div class="stage" id="stage">
+          <video
+            id="media"
+            class="stage__video"
+            preload="metadata"
+            playsinline
+          ></video>
+          <canvas id="visualizer" class="stage__visualizer" hidden></canvas>
+          <div class="audio-overlay" id="audioInfo" hidden>
+            <div class="audio-overlay__now">
+              <span class="eyebrow">Now playing</span>
+              <h2 class="audio-overlay__title" id="audioTitle"></h2>
+            </div>
+            <div
+              class="segmented"
+              role="group"
+              aria-label="Visualization style"
+              id="visualizerModes"
+            >
+              <button
+                class="segmented__item"
+                type="button"
+                data-command="set-visualizer"
+                data-arg="bars"
+              >
+                Spectrum
+              </button>
+              <button
+                class="segmented__item"
+                type="button"
+                data-command="set-visualizer"
+                data-arg="wave"
+              >
+                Waveform
+              </button>
+              <button
+                class="segmented__item"
+                type="button"
+                data-command="set-visualizer"
+                data-arg="radial"
+              >
+                Radial
+              </button>
+            </div>
+          </div>
+
+          <section class="empty-state" id="emptyState">
+            <h1 class="empty-state__title">Play a file or a stream</h1>
+            <p class="empty-state__text">
+              Local audio and video, direct links, HLS and MPEG-DASH.
+            </p>
+            <div class="empty-state__actions">
+              <button
+                class="btn btn--primary"
+                type="button"
+                data-command="open-file"
+              >
+                <svg class="icon"><use href="#i-folder" /></svg>Open files<kbd
+                  class="btn__kbd"
+                  data-shortcut="O"
+                ></kbd>
+              </button>
+              <button class="btn" type="button" data-command="open-url">
+                <svg class="icon"><use href="#i-link" /></svg>Open URL<kbd
+                  class="btn__kbd"
+                  data-shortcut="U"
+                ></kbd>
+              </button>
+            </div>
+            <p class="empty-state__hint">
+              or drop files anywhere in the window
+            </p>
+            <dl class="formats" id="formatsHint"></dl>
+          </section>
+
+          <div class="spinner" id="spinner" hidden></div>
+          <div class="osd" id="osd" aria-live="polite"></div>
+          <div class="drop-overlay" id="dropOverlay">
+            <span>Drop to add to the playlist</span>
+          </div>
+        </div>
+
+        <div class="controls" id="controls">
+          <div class="timeline">
+            <span class="timeline__time" id="currentTime">0:00</span>
+            <div
+              class="progress"
+              id="progress"
+              role="slider"
+              tabindex="0"
+              aria-label="Playback position"
+              aria-valuemin="0"
+              aria-valuemax="0"
+              aria-valuenow="0"
+            >
+              <div class="progress__track">
+                <div class="progress__buffered" id="progressBuffered"></div>
+                <div class="progress__played" id="progressPlayed"></div>
+              </div>
+              <div class="progress__thumb" id="progressThumb"></div>
+              <div class="progress__tooltip" id="progressTooltip">0:00</div>
+            </div>
+            <span class="timeline__time" id="duration">0:00</span>
+          </div>
+
+          <div class="control-row">
+            <div class="control-group">
+              <button
+                class="icon-btn"
+                type="button"
+                data-command="previous"
+                title="Previous track (Ctrl+←)"
+              >
+                <svg class="icon"><use href="#i-prev" /></svg>
+              </button>
+              <button
+                class="icon-btn"
+                type="button"
+                data-command="backward"
+                title="Back 10 s (←)"
+              >
+                <svg class="icon"><use href="#i-rewind" /></svg>
+              </button>
+              <button
+                class="icon-btn icon-btn--main"
+                type="button"
+                data-command="toggle-play"
+                id="playButton"
+                title="Play (Space)"
+              >
+                <svg class="icon icon--lg"><use href="#i-play" /></svg>
+              </button>
+              <button
+                class="icon-btn"
+                type="button"
+                data-command="stop"
+                title="Stop (S)"
+              >
+                <svg class="icon"><use href="#i-stop" /></svg>
+              </button>
+              <button
+                class="icon-btn"
+                type="button"
+                data-command="forward"
+                title="Forward 10 s (→)"
+              >
+                <svg class="icon"><use href="#i-forward" /></svg>
+              </button>
+              <button
+                class="icon-btn"
+                type="button"
+                data-command="next"
+                title="Next track (Ctrl+→)"
+              >
+                <svg class="icon"><use href="#i-next" /></svg>
+              </button>
+            </div>
+
+            <div class="now-playing">
+              <div class="now-playing__title" id="trackTitle">No media</div>
+              <div class="now-playing__meta" id="trackMeta"></div>
+            </div>
+
+            <div class="control-group">
+              <select
+                class="rate-select"
+                id="rateSelect"
+                title="Playback speed"
+              >
+                <option value="0.5">0.5×</option>
+                <option value="0.75">0.75×</option>
+                <option value="1">1×</option>
+                <option value="1.25">1.25×</option>
+                <option value="1.5">1.5×</option>
+                <option value="2">2×</option>
+              </select>
+              <button
+                class="icon-btn"
+                type="button"
+                data-command="cycle-repeat"
+                id="repeatButton"
+                title="Repeat: off (R)"
+              >
+                <svg class="icon"><use href="#i-repeat" /></svg>
+              </button>
+              <button
+                class="icon-btn"
+                type="button"
+                data-command="toggle-shuffle"
+                id="shuffleButton"
+                title="Shuffle (H)"
+                aria-pressed="false"
+              >
+                <svg class="icon"><use href="#i-shuffle" /></svg>
+              </button>
+              <span class="control-divider" aria-hidden="true"></span>
+              <button
+                class="icon-btn"
+                type="button"
+                data-command="open-subtitles"
+                title="Subtitles (Ctrl+T)"
+              >
+                <svg class="icon"><use href="#i-subtitles" /></svg>
+              </button>
+              <button
+                class="icon-btn"
+                type="button"
+                data-command="screenshot"
+                title="Save frame (Ctrl+Shift+S)"
+              >
+                <svg class="icon"><use href="#i-camera" /></svg>
+              </button>
+              <button
+                class="icon-btn"
+                type="button"
+                data-command="pip"
+                title="Picture-in-picture (I)"
+              >
+                <svg class="icon"><use href="#i-pip" /></svg>
+              </button>
+              <button
+                class="icon-btn"
+                type="button"
+                data-command="toggle-playlist"
+                id="playlistButton"
+                title="Playlist (Ctrl+L)"
+              >
+                <svg class="icon"><use href="#i-queue" /></svg>
+              </button>
+              <span class="control-divider" aria-hidden="true"></span>
+              <div class="volume">
+                <button
+                  class="icon-btn"
+                  type="button"
+                  data-command="mute"
+                  id="muteButton"
+                  title="Mute (M)"
+                >
+                  <svg class="icon"><use href="#i-volume-high" /></svg>
+                </button>
+                <input
+                  class="volume__slider"
+                  id="volumeSlider"
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  aria-label="Volume"
+                />
+              </div>
+              <button
+                class="icon-btn"
+                type="button"
+                data-command="fullscreen"
+                id="fullscreenButton"
+                title="Full screen (F)"
+              >
+                <svg class="icon"><use href="#i-fullscreen" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <aside class="sidebar" id="sidebar">
+        <header class="sidebar__header">
+          <h2 class="sidebar__title">
+            Up next <span class="sidebar__count" id="playlistCount">0</span>
+          </h2>
+          <div class="sidebar__actions">
+            <button
+              class="icon-btn icon-btn--sm"
+              type="button"
+              data-command="open-file"
+              title="Add files (Ctrl+O)"
+            >
+              <svg class="icon"><use href="#i-add" /></svg>
+            </button>
+            <button
+              class="icon-btn icon-btn--sm"
+              type="button"
+              data-command="open-url"
+              title="Add URL (Ctrl+U)"
+            >
+              <svg class="icon"><use href="#i-link" /></svg>
+            </button>
+            <button
+              class="icon-btn icon-btn--sm"
+              type="button"
+              data-command="clear-playlist"
+              title="Clear playlist"
+            >
+              <svg class="icon"><use href="#i-delete" /></svg>
+            </button>
+          </div>
+        </header>
+        <p class="sidebar__empty" id="playlistEmpty">
+          Nothing queued yet.<br />Added files and links appear here.
+        </p>
+        <ol class="playlist" id="playlist"></ol>
+      </aside>
+    </div>
+
+    <dialog class="dialog" id="urlDialog">
+      <form method="dialog" class="dialog__form" id="urlForm">
+        <h2 class="dialog__title">Open URL</h2>
+        <p class="dialog__hint">
+          Direct link to a media file, an HLS (.m3u8) or an MPEG-DASH (.mpd)
+          stream.
+        </p>
+        <input
+          class="dialog__input"
+          id="urlInput"
+          type="text"
+          placeholder="https://example.com/video.mp4"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <p
+          class="dialog__status"
+          id="urlStatus"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <div class="dialog__section" id="recentUrlsSection">
+          <h3 class="dialog__subtitle eyebrow">Recent</h3>
+          <ul class="url-list" id="recentUrls"></ul>
+        </div>
+        <div class="dialog__section">
+          <h3 class="dialog__subtitle eyebrow">Examples</h3>
+          <ul class="url-list" id="exampleUrls"></ul>
+        </div>
+        <div class="dialog__buttons">
+          <button class="btn" type="button" value="cancel" data-dialog-close>
+            Cancel
+          </button>
+          <button class="btn btn--primary" type="submit" value="open">
+            Open
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="dialog" id="helpDialog">
+      <form method="dialog" class="dialog__form">
+        <h2 class="dialog__title">Keyboard shortcuts</h2>
+        <table class="shortcuts" id="shortcutsTable"></table>
+        <div class="dialog__buttons">
+          <button class="btn btn--primary" type="submit">Close</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toasts" id="toasts" aria-live="assertive"></div>
+
+    <svg class="sprite" aria-hidden="true">
+      <symbol id="i-play" viewBox="0 0 24 24">
+        <path d="M8 5v14l11-7z" />
+      </symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24">
+        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+      </symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24">
+        <path d="M6 6h12v12H6z" />
+      </symbol>
+      <symbol id="i-prev" viewBox="0 0 24 24">
+        <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+      </symbol>
+      <symbol id="i-next" viewBox="0 0 24 24">
+        <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+      </symbol>
+      <symbol id="i-rewind" viewBox="0 0 24 24">
+        <path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z" />
+      </symbol>
+      <symbol id="i-forward" viewBox="0 0 24 24">
+        <path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z" />
+      </symbol>
+      <symbol id="i-volume-high" viewBox="0 0 24 24">
+        <path
+          d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"
+        />
+      </symbol>
+      <symbol id="i-volume-low" viewBox="0 0 24 24">
+        <path
+          d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z"
+        />
+      </symbol>
+      <symbol id="i-volume-off" viewBox="0 0 24 24">
+        <path
+          d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"
+        />
+      </symbol>
+      <symbol id="i-repeat" viewBox="0 0 24 24">
+        <path
+          d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"
+        />
+      </symbol>
+      <symbol id="i-repeat-one" viewBox="0 0 24 24">
+        <path
+          d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zm-4-2V9h-1l-2 1v1h1.5v4H13z"
+        />
+      </symbol>
+      <symbol id="i-shuffle" viewBox="0 0 24 24">
+        <path
+          d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"
+        />
+      </symbol>
+      <symbol id="i-subtitles" viewBox="0 0 24 24">
+        <path
+          d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"
+        />
+      </symbol>
+      <symbol id="i-camera" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="3.2" />
+        <path
+          d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"
+        />
+      </symbol>
+      <symbol id="i-pip" viewBox="0 0 24 24">
+        <path
+          d="M19 11h-8v6h8v-6zm4 8V4.98C23 3.88 22.1 3 21 3H3c-1.1 0-2 .88-2 1.98V19c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2zm-2 .02H3V4.97h18v14.05z"
+        />
+      </symbol>
+      <symbol id="i-queue" viewBox="0 0 24 24">
+        <path
+          d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"
+        />
+      </symbol>
+      <symbol id="i-fullscreen" viewBox="0 0 24 24">
+        <path
+          d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"
+        />
+      </symbol>
+      <symbol id="i-fullscreen-exit" viewBox="0 0 24 24">
+        <path
+          d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"
+        />
+      </symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24">
+        <path
+          d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"
+        />
+      </symbol>
+      <symbol id="i-link" viewBox="0 0 24 24">
+        <path
+          d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"
+        />
+      </symbol>
+      <symbol id="i-close" viewBox="0 0 24 24">
+        <path
+          d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+        />
+      </symbol>
+      <symbol id="i-delete" viewBox="0 0 24 24">
+        <path
+          d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+        />
+      </symbol>
+      <symbol id="i-add" viewBox="0 0 24 24">
+        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+      </symbol>
+    </svg>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
