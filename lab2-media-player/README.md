@@ -1,6 +1,5 @@
 # Media Player — Lab Work 2
 
-**Course:** Multimedia Systems Development
 **Topic:** Developing a multimedia application with modern technologies
 **Variant 1:** Media player (desktop application)
 
